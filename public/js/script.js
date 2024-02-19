@@ -1,62 +1,68 @@
 document.addEventListener('DOMContentLoaded', () => {
     const messageForm = document.getElementById('messageForm');
-    const messageInput = document.getElementById('message');
+    const messageInput = document.getElementById('messageInput');
     const messagesDiv = document.getElementById('messages');
+    const socket = io();
+    const qrCodeContainer = document.getElementById('qrCodeContainer');
 
-    
-  
-    // Function to send a message to the server
-    const sendMessage = async (message) => {
-      try {
-        const response = await fetch('/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ message }),
-        });
-        const data = await response.json();
-        console.log(data.message);
-      } catch (error) {
-        console.error('Error sending message:', error);
-      }
-    };
-  
-    // Function to poll for new messages
-    const pollMessages = () => {
-      setInterval(async () => {
-        try {
-          const response = await fetch('/receive');
-          if (response.ok) {
-            const data = await response.json();
-            displayMessage(data.message);
-          }
-        } catch (error) {
-          console.error('Error fetching messages:', error);
+
+    console.log('Document loaded and script initialized.');
+    messageForm.style.display = 'block';
+
+if (qrCodeContainer) {
+    const fetchAndDisplayQRCode = async () => {
+        console.log('Fetching QR code from server.');
+        const response = await fetch('/generate-qr');
+        if (response.ok) {
+            const qrHtml = await response.text();
+            qrCodeContainer.innerHTML = qrHtml;
+        } else {
+            console.error('Failed to fetch QR code');
         }
-      }, 5000); // Poll every 5 seconds
     };
 
-// Function to display a message
-// Function to display a message
-const displayMessage = (message) => {
-    const messageElement = document.createElement('div');
-    messageElement.textContent = message;
-    messageElement.classList.add('message-style'); // Add class for styling
-    messagesDiv.appendChild(messageElement);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
-  };
-  
-  
-    // Event listener for form submission
+    fetchAndDisplayQRCode();
+}
+
+    const sendMessage = (message) => {
+        console.log(`Sending message: ${message}`);
+        socket.emit('chat_message', message);
+    };
+
+    const displayMessage = (message) => {
+        console.log(`Displaying message: ${message}`);
+        const messageElement = document.createElement('div');
+        messageElement.textContent = message;
+        messageElement.classList.add('message-style');
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    };
+
     messageForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const message = messageInput.value;
-      sendMessage(message);
-      messageInput.value = ''; // Clear the input after sending
+        event.preventDefault();
+        const message = messageInput.value.trim();
+        if (message) {
+            sendMessage(message);
+            messageInput.value = '';
+        }
     });
-  
-    // Start polling for messages when the page loads
-    pollMessages();
-  });
-  
+
+    socket.on('connect', () => {
+        console.log('Socket connected:', socket.id);
+    });
+
+    socket.on('chat_message', (message) => {
+        console.log(`Received chat message: ${message}`);
+        displayMessage(message);
+    });
+
+    // socket.on('auth_success', (data) => {
+    //     console.log("Authentication successful", data.message);
+    //     const token = data.token;
+    //     window.location.href = '/chat';
+    //     messageForm.style.display = 'block';
+    //     // Redirect to the chat page with the token
+    // });
+
+    // Show the message form as the user is already authenticated if they are on this page
+});
