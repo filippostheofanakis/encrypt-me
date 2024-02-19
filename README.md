@@ -4,6 +4,17 @@
 
 Encrypt-Me is an encrypted messaging service built with Node.js. It uses Express.js to handle HTTP requests and provides end-to-end encryption for secure message exchange.
 
+## Features
+
+- **End-to-End Encryption**: Messages are encrypted on the client side and decrypted on the recipient's side, ensuring that no one else, including the server, can read the contents of the messages.
+
+- **Real-Time Messaging**: Utilizes WebSockets for real-time communication between users, ensuring instant delivery of messages without needing to refresh the page.
+
+- **QR Code Authentication**: Users can log in securely via a QR code. This feature enhances security by enabling a two-factor authentication process.
+
+- **Environment Variables for Configuration**: Easy configuration through environment variables for setting up the secret key, server port, and ngrok URL.
+
+
 ## Installation
 
 To set up the Encrypt-Me project, follow these steps:
