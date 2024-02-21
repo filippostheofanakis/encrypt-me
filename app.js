@@ -20,18 +20,22 @@ const PORT = process.env.PORT || 3000;
 // Global state
 let messages = []; // This will temporarily store messages in memory
 let validTokens= {}; // Store for valid authentication tokens
+let userNames = {};
 
 // Express app setup
 app.use(express.static('public')); // Serve static files from the 'public' directory
 app.set('view engine', 'ejs'); // Set the view engine to ejs
 app.use(express.json());
 app.use(cookieParser());
-
 app.use(session({
   secret: process.env.SECRET_KEY,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // Note: In production, set this to true and use HTTPS
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true, // Mitigate XSS
+    sameSite: 'strict' // Mitigate CSRF
+  }
 }));
 
 
@@ -43,16 +47,15 @@ const autoDeleteOldMessages = () => {
 
 // Routes for messaging
 app.post('/send', (req, res) => {
-  const { message } = req.body;
-  if (message) {
-      const encryptedMessage = encryptMessage(message);
-      const timestamp = new Date();
-      messages.push({ encryptedMessage, timestamp });
-      io.emit('chat_message', decryptMessage(encryptedMessage));
-      res.status(200).send({ message: 'Message sent successfully' });
-
+  const { message, userName } = req.body;
+  if (message && userName) {
+    const encryptedMessage = encryptMessage(message);
+    const timestamp = new Date();
+    messages.push({ encryptedMessage: encryptMessage(message), timestamp, userName });
+    io.emit('chat_message', { msg: decryptMessage(encryptedMessage), userName });
+    res.status(200).send({ message: 'Message sent successfully' });
   } else {
-      res.status(400).send({ message: 'No message provided' });
+    res.status(400).send({ message: 'No message or username provided' });
   }
 });
 
@@ -91,36 +94,75 @@ app.get('/auth', async (req, res) => {
 
 // QR Code generation route
 app.get('/generate-qr', async (req, res) => {
-  const token = `auth_${crypto.randomBytes(16).toString('hex')}`; // Generate a secure token
+  const token = `auth_${crypto.randomBytes(16).toString('hex')}`;
+  const expiration = Date.now() + 10 * 60 * 1000; // Token expiration time (10 minutes)
+  validTokens[token] = expiration;
   const url = `${process.env.NGROK_URL}/authenticate?token=${token}`;
-
-  // Store the token as valid for a short period (e.g., 10 minutes)
-  validTokens[token] = setTimeout(() => delete validTokens[token], 10 * 60 * 1000);
 
   try {
     const qr = await QRCode.toDataURL(url);
-    res.send(`<img src="${qr}" />`); // Send QR code as an image to the client
+    res.send(`<img src="${qr}" />`);
   } catch (error) {
     console.error(error);
     res.status(500).send('Error generating QR code');
   }
 });
 
+
 // Hnadle authentication from QR Code
 app.get('/authenticate', (req, res) => {
   const { token } = req.query;
-  if (validTokens[token]) {
-      delete validTokens[token]; // Remove token from valid tokens
-      req.session.isAuthenticated = true; // Set the authentication status in the session
+  if (validTokens[token] && validTokens[token] > Date.now()) {
+    delete validTokens[token]; // Invalidate token after usex
+    req.session.isAuthenticated = true;
+  
       // Send a webpage that redirects to the chat page
       res.send(`
-          <html>
-          <body>
-              <h1>Authentication Successful</h1>
-              <button onclick="window.location.href='/chat'">Go to Chat</button>
-          </body>
-          </html>
-      `);
+      <html>
+      <head>
+          <style>
+              body {
+                  font-family: Arial, sans-serif;
+                  text-align: center;
+                  padding: 50px;
+              }
+  
+              h1 {
+                  color: #4CAF50; /* Green text color */
+              }
+  
+              input, button {
+                padding: 10px;
+                margin: 10px;
+                border-radius: 5px;
+                border: 1px solid #ddd;
+            }
+            button {
+                background-color: #008CBA; /* Blue background */
+                color: white; /* White text */
+                cursor: pointer;
+            }
+  
+              button:hover {
+                  background-color: #005F8C; /* Darker blue on hover */
+              }
+          </style>
+      </head>
+      <body>
+      <h1>Welcome to the Chat!</h1>
+      <p>Set your username to continue:</p>
+      <input type="text" id="username" placeholder="Your username">
+      <button onclick="setUsernameAndGoToChat()">Set Username & Enter Chat</button>
+      <script>
+      function setUsernameAndGoToChat() {
+          const username = document.getElementById('username').value;
+          // Redirect to the chat page with the username
+          window.location.href = '/chat?username=' + encodeURIComponent(username) + '&token=' + encodeURIComponent('${token}');
+      }
+  </script>
+      </body>
+      </html>
+  `);
   } else {
       res.status(401).send('Invalid or expired token.');
   }
@@ -134,25 +176,44 @@ app.get('/isAuthenticated', (req, res) => {
 });
 
 app.get('/chat', (req, res) => {
-  // const { token } = req.query;
-  if (req.session.isAuthenticated) {
+  const { token } = req.query;
+  if (req.session.isAuthenticated || (validTokens[token] && validTokens[token] > Date.now())) {
     res.render('chat'); // Render the chat page
   } else {
-      res.redirect('/'); // If not authenticated, redirect to the main page
+    res.redirect('/'); // If not authenticated, redirect to the main page
   }
 });
 
 
 // Setup WebSocket communication using socket.io
 io.on('connection', (socket) => {
-  console.log('A user connected', socket.id);
-  socket.on('chat_message', (msg) => {
-      // Broadcast message to all users in the chat room
-      io.emit('chat_message', msg)
+  // console.log('A user connected', socket.id);
+  const existingMessages = messages.map(msgObj => ({
+    msg: decryptMessage(msgObj.encryptedMessage),
+    userName: msgObj.userName
+  }));
+  socket.emit('existing_messages', existingMessages);
+
+    // Listen for setting username
+    socket.on('set_username', (userName) => {
+      userNames[socket.id] = userName;
+      console.log(`${userName} has joined the chat`);
+      // Broadcast to all users the new user's arrival
+      io.emit('user_joined', `${userName} has joined the chat`);
+    });
+
+    socket.on('chat_message', ({ userName, msg }) => {
+      console.log(userNames); // Debug: Log the userNames object
+      // console.log(socket.id); // Debug: Log the socket ID
+      const currentUserName = userNames[socket.id] || 'Anonymous';
+      io.emit('chat_message', { userName: currentUserName, msg: msg });
   });
 
   socket.on('disconnect', () => {
-      console.log('User disconnected from the chat room.');
+    // console.log(`${userNames[socket.id] || 'A user'} disconnected from the chat room.`);
+    // Optionally, broadcast that the user has left
+    io.emit('user_left', `${userNames[socket.id] || 'A user'} has left the chat.`);
+    delete userNames[socket.id]; // Clean up the username store
   });
 });
 

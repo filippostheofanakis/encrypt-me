@@ -67,5 +67,15 @@ body {
   /* #messageForm {
     display: none;
 } */
+
+/* Style for authentication success message */
+.auth-success {
+  background-color: #4CAF50; /* Green background */
+  color: white; /* White text color */
+  padding: 10px;
+  margin: 15px 0;
+  border-radius: 5px;
+  text-align: center;
+}
   
   

@@ -3,10 +3,12 @@ require('dotenv').config();
 const crypto = require('crypto');
 
 const algorithm = 'aes-256-ctr';
-const secretKey = process.env.SECRET_KEY;
-const iv = crypto.randomBytes(16); // Initialization vector for AES
+const secretKey = crypto.createHash('sha256').update(String(process.env.SECRET_KEY)).digest('base64').substr(0, 32);
+const ivLength = 16; // AES block size in bytes
 
 const encryptMessage = (text) => {
+    const iv = crypto.randomBytes(ivLength);
+
     const cipher = crypto.createCipheriv(algorithm, secretKey, iv);
     const encrypted = Buffer.concat([cipher.update(text), cipher.final()]);
 

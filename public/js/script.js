@@ -4,10 +4,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const messagesDiv = document.getElementById('messages');
     const socket = io();
     const qrCodeContainer = document.getElementById('qrCodeContainer');
+    const usernameFormContainer = document.getElementById('usernameFormContainer'); // Add this line
+    const usernameForm = document.getElementById('usernameForm'); // Add this line
+    const usernameInput = document.getElementById('usernameInput'); // Add this line
+    const params = new URLSearchParams(window.location.search);
+const username = params.get('username'); // Now you have the username to use
 
 
     console.log('Document loaded and script initialized.');
     messageForm.style.display = 'block';
+
+    if (username) {
+        socket.emit('set_username', username);
+    }
+
 
 if (qrCodeContainer) {
     const fetchAndDisplayQRCode = async () => {
@@ -24,25 +34,36 @@ if (qrCodeContainer) {
     fetchAndDisplayQRCode();
 }
 
-    const sendMessage = (message) => {
-        console.log(`Sending message: ${message}`);
-        socket.emit('chat_message', message);
-    };
+const sendMessage = (message) => {
+    console.log(`Sending message: ${message}`);
+    socket.emit('chat_message', { userName: username, msg: message });
+};
 
-    const displayMessage = (message) => {
-        console.log(`Displaying message: ${message}`);
-        const messageElement = document.createElement('div');
-        messageElement.textContent = message;
-        messageElement.classList.add('message-style');
-        messagesDiv.appendChild(messageElement);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// Function to escape HTML to prevent XSS attacks
+function escapeHTML(text) {
+    var map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
     };
+    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
+function displayMessage(message) {
+    const messagesDiv = document.getElementById('messages');
+    const messageElement = document.createElement('div');
+    messageElement.innerHTML = `<strong>${escapeHTML(message.userName)}</strong>: ${escapeHTML(message.msg)}`;
+    messagesDiv.appendChild(messageElement);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom of the chat
+}
 
     messageForm.addEventListener('submit', (event) => {
         event.preventDefault();
         const message = messageInput.value.trim();
         if (message) {
-            sendMessage(message);
+            sendMessage( message);
             messageInput.value = '';
         }
     });
@@ -51,9 +72,8 @@ if (qrCodeContainer) {
         console.log('Socket connected:', socket.id);
     });
 
-    socket.on('chat_message', (message) => {
-        console.log(`Received chat message: ${message}`);
-        displayMessage(message);
+    socket.on('chat_message', (data) => {
+        displayMessage(data);
     });
 
     // socket.on('auth_success', (data) => {
@@ -65,4 +85,27 @@ if (qrCodeContainer) {
     // });
 
     // Show the message form as the user is already authenticated if they are on this page
+
+
+        // Handle username selection submission
+        usernameForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const username = usernameInput.value.trim();
+            if (username) {
+                socket.emit('set_username', username);
+                usernameFormContainer.style.display = 'none'; // Hide the username form
+                messageForm.style.display = 'block'; // Show the message form
+            }
+        });
+    
+        // Example handling for auth_success - adapt based on your server logic
+        socket.on('auth_success', () => {
+            qrCodeContainer.style.display = 'none'; // Hide the QR code
+            usernameFormContainer.style.display = 'block'; // Show the username form
+        });
+
+        socket.on('existing_messages', (messages) => {
+            messages.forEach(displayMessage);
+        });
 });
+

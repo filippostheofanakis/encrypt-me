@@ -2,6 +2,8 @@ require('dotenv').config();
 const axios = require('axios');
 const ngrokUrl = process.env.NGROK_URL;
 const readline = require('readline');
+const userName = 'UserX'; // Example static username
+
 
 
 const rl = readline.createInterface({
@@ -13,7 +15,8 @@ const rl = readline.createInterface({
 const sendMessage = async (message) => {
   try {
     const response = await axios.post(`${ngrokUrl}/send`, {
-      message
+      message,
+      userName
     }, {
       headers: {
         'Content-Type': 'application/json'
