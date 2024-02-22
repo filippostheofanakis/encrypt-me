@@ -11,7 +11,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const usernameInput = document.getElementById('usernameInput'); // Add this line
     const params = new URLSearchParams(window.location.search);
 const username = params.get('username'); // Now you have the username to use
+const pageIdentifier = document.getElementById('pageIdentifier');
 
+if (pageIdentifier && pageIdentifier.value === 'chatPage') {
+    socket.on('chat_message', (data) => {
+        displayMessage(data);
+    });
+}
 messageForm.style.display = 'none'; // Hide the form by default
 
     // Check if the user is authenticated
@@ -84,9 +90,9 @@ function displayMessage(message) {
         console.log('Socket connected:', socket.id);
     });
 
-    socket.on('chat_message', (data) => {
-        displayMessage(data);
-    });
+    // socket.on('chat_message', (data) => {
+    //     displayMessage(data);
+    // });
 
     // socket.on('auth_success', (data) => {
     //     console.log("Authentication successful", data.message);
