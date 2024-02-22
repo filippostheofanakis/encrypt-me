@@ -1,3 +1,4 @@
+//app.js
 require('dotenv').config();
 const express = require("express");
 const QRCode = require('qrcode');
@@ -149,7 +150,7 @@ app.get('/authenticate', (req, res) => {
           </style>
       </head>
       <body>
-      <h1>Welcome to the Chat!</h1>
+      <h1>Welcome to the Chat! app.js</h1>
       <p>Set your username to continue:</p>
       <input type="text" id="username" placeholder="Your username">
       <button onclick="setUsernameAndGoToChat()">Set Username & Enter Chat</button>

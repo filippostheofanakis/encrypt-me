@@ -1,4 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
+//script.js
+
+document.addEventListener('DOMContentLoaded', async () => {
     const messageForm = document.getElementById('messageForm');
     const messageInput = document.getElementById('messageInput');
     const messagesDiv = document.getElementById('messages');
@@ -10,13 +12,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
 const username = params.get('username'); // Now you have the username to use
 
+messageForm.style.display = 'none'; // Hide the form by default
+
+    // Check if the user is authenticated
+    const isAuthenticated = await checkAuthentication();
+    if (isAuthenticated) {
+        // If the user is authenticated, show the message form
+        messageForm.style.display = 'block';
+        if (username) {
+            socket.emit('set_username', username);
+        }
+    }
+
+
 
     console.log('Document loaded and script initialized.');
-    messageForm.style.display = 'block';
 
-    if (username) {
-        socket.emit('set_username', username);
-    }
+
 
 
 if (qrCodeContainer) {
@@ -52,7 +64,7 @@ function escapeHTML(text) {
 }
 
 function displayMessage(message) {
-    const messagesDiv = document.getElementById('messages');
+    // const messagesDiv = document.getElementById('messages');
     const messageElement = document.createElement('div');
     messageElement.innerHTML = `<strong>${escapeHTML(message.userName)}</strong>: ${escapeHTML(message.msg)}`;
     messagesDiv.appendChild(messageElement);
@@ -107,5 +119,19 @@ function displayMessage(message) {
         socket.on('existing_messages', (messages) => {
             messages.forEach(displayMessage);
         });
+
+        async function checkAuthentication() {
+            try {
+                const response = await fetch('/isAuthenticated');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.isAuthenticated;
+                }
+                return false;
+            } catch (error) {
+                console.error('Failed to check authentication status:', error);
+                return false;
+            }
+        }   
 });
 
